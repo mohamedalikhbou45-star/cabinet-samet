@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  ADMIN
+}
+
+model User {
+  id             String               @id @default(cuid())
+  name           String
+  email          String               @unique
+  password       String
+  company        String?
+  role           UserRole             @default(CLIENT)
+  active         Boolean              @default(true)
+  failedAttempts Int                  @default(0)
+  lockedUntil    DateTime?
+  lockedAt       DateTime?
+  locked         Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  documents      Document[]
+  messages       Message[]
+  resetTokens    PasswordResetToken[]
+  loginAttempts  LoginAttempt[]
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum DocumentType {
+  FACTURE
+  LEASING
+  RELEVE_BANCAIRE
+  AUTRE
+}
+
+enum DocumentStatus {
+  EN_ATTENTE
+  EN_TRAITEMENT
+  TRAITE
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  originalName String
+  storedName   String
+  mimeType     String
+  size         Int
+  type         DocumentType   @default(AUTRE)
+  status       DocumentStatus @default(EN_ATTENTE)
+  note         String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  @@index([userId])
+}
