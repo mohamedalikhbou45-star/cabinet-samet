@@ -8,6 +8,7 @@ import {
   sendAdminLockAlertEmail,
   sendAdminSuspiciousLoginEmail,
 } from "@/lib/mail";
+import { getAdminNotificationEmails } from "@/lib/notify";
 import type { User as PrismaUser } from "@prisma/client";
 
 function extractIp(req?: { headers?: Record<string, string | undefined> }) {
@@ -149,14 +150,11 @@ async function handleFailedAttempt(user: PrismaUser, ip: string) {
 
   // Alerte email dès 3 tentatives échouées sur un compte administrateur.
   if (user.role === "ADMIN" && failedAttempts === 3) {
-    const admins = await prisma.user.findMany({
-      where: { role: "ADMIN" },
-      select: { email: true },
-    });
+    const admins = await getAdminNotificationEmails();
     await Promise.all(
-      admins.map((a) =>
+      admins.map((email) =>
         sendAdminSuspiciousLoginEmail({
-          to: a.email,
+          to: email,
           adminName: user.name,
           attempts: failedAttempts,
           ip,
@@ -167,14 +165,11 @@ async function handleFailedAttempt(user: PrismaUser, ip: string) {
 
   if (lock.permanent) {
     await sendAccountLockedEmail({ to: user.email, name: user.name });
-    const admins = await prisma.user.findMany({
-      where: { role: "ADMIN" },
-      select: { email: true },
-    });
+    const admins = await getAdminNotificationEmails();
     await Promise.all(
-      admins.map((a) =>
+      admins.map((email) =>
         sendAdminLockAlertEmail({
-          to: a.email,
+          to: email,
           clientName: user.name,
           clientEmail: user.email,
         })

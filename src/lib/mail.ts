@@ -1,4 +1,7 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
+
+const NAVY = "#0B2545";
+const GREEN = "#86BC25";
 
 const STATUS_LABELS: Record<string, string> = {
   EN_ATTENTE: "En attente",
@@ -6,30 +9,35 @@ const STATUS_LABELS: Record<string, string> = {
   TRAITE: "Traité",
 };
 
-function getTransport() {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) {
-    return null;
-  }
-  return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT ?? 587),
-    secure: Number(SMTP_PORT ?? 587) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-  });
+const resendClient = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+function fromAddress() {
+  const email = process.env.EMAIL_FROM ?? "onboarding@resend.dev";
+  return `Cabinet Samet de Comptabilité <${email}>`;
 }
 
+/** Gabarit HTML commun à tous les emails : en-tête bleu marine, logo CS vert. */
 function shell(bodyHtml: string) {
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: auto; color: #1a1a1a;">
-      <div style="background:#0a0a0a; padding:24px; border-radius:8px 8px 0 0;">
-        <h1 style="color:#fff; font-size:16px; margin:0;">
-          Cabinet Samet <span style="color:#86BC25;">de Comptabilité</span>
-        </h1>
+    <div style="font-family: -apple-system, Arial, sans-serif; max-width: 560px; margin: auto; color: #1a1a1a; background:#f4f5f7;">
+      <div style="background:${NAVY}; padding:28px 28px 24px; border-radius:8px 8px 0 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="background:${GREEN}; width:36px; height:36px; border-radius:6px; text-align:center; vertical-align:middle;">
+              <span style="color:${NAVY}; font-weight:800; font-size:14px; font-family: -apple-system, Arial, sans-serif;">CS</span>
+            </td>
+            <td style="padding-left:12px;">
+              <span style="color:#fff; font-size:15px; font-weight:700;">Cabinet Samet</span>
+              <span style="color:#c8d3e0; font-size:15px; font-weight:400;"> de Comptabilité</span>
+            </td>
+          </tr>
+        </table>
       </div>
-      <div style="border:1px solid #eee; border-top:none; padding:28px; border-radius:0 0 8px 8px;">
+      <div style="background:#fff; border:1px solid #e5e7eb; border-top:none; padding:28px; border-radius:0 0 8px 8px; font-size:14px; line-height:1.6;">
         ${bodyHtml}
-        <p style="color:#999; font-size:12px; margin-top:32px;">
+        <p style="color:#94a3b8; font-size:12px; margin-top:32px; border-top:1px solid #eef0f3; padding-top:16px;">
           Ceci est un message automatique, merci de ne pas y répondre.
         </p>
       </div>
@@ -38,28 +46,81 @@ function shell(bodyHtml: string) {
 }
 
 function button(href: string, label: string) {
-  return `<a href="${href}" style="display:inline-block; background:#86BC25; color:#0a0a0a; font-weight:bold; text-decoration:none; padding:12px 22px; border-radius:4px;">${label}</a>`;
+  return `<a href="${href}" style="display:inline-block; background:${GREEN}; color:${NAVY}; font-weight:700; text-decoration:none; padding:12px 24px; border-radius:4px; font-size:14px;">${label}</a>`;
 }
 
-/** Envoi générique — trace dans la console si aucun SMTP n'est configuré. */
-async function send(to: string, subject: string, html: string, logLine: string) {
-  const from =
-    process.env.SMTP_FROM ??
-    "Cabinet Samet de Comptabilité <no-reply@cabinet-samet.fr>";
-  const transport = getTransport();
+function badge(label: string) {
+  return `<span style="display:inline-block; background:#fef3c7; color:#92400e; font-weight:700; font-size:12px; padding:4px 10px; border-radius:999px;">${label}</span>`;
+}
 
-  if (!transport) {
+/** Envoi via Resend — trace dans la console si RESEND_API_KEY est absente. */
+async function send(to: string, subject: string, html: string, logLine: string) {
+  if (!resendClient) {
     console.log(`\n[EMAIL SIMULÉ] À: ${to}\nObjet: ${subject}\n${logLine}\n`);
-    return;
+    return { ok: false, simulated: true as const };
   }
 
   try {
-    await transport.sendMail({ from, to, subject, html });
+    const result = await resendClient.emails.send({
+      from: fromAddress(),
+      to,
+      subject,
+      html,
+    });
+    if (result.error) {
+      console.error(`[RESEND] Échec envoi à ${to} :`, result.error);
+      return { ok: false, error: result.error };
+    }
+    console.log(`[RESEND] Email envoyé à ${to} (id=${result.data?.id}) — ${subject}`);
+    return { ok: true, id: result.data?.id };
   } catch (error) {
-    console.error("Échec de l'envoi de l'email :", error);
+    console.error(`[RESEND] Exception envoi à ${to} :`, error);
+    return { ok: false, error };
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 1. Inscription client → email de bienvenue
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendWelcomeEmail(params: { to: string; name: string }) {
+  const subject = "Bienvenue au Cabinet Samet de Comptabilité";
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = shell(`
+    <p>Bonjour ${params.name},</p>
+    <p>Votre espace client <strong>Cabinet Samet de Comptabilité</strong> a bien été créé. Vous pouvez dès à présent déposer vos documents (factures, leasing, relevés bancaires) et suivre leur traitement.</p>
+    <p style="margin:24px 0;">${button(`${base}/login`, "Accéder à mon espace")}</p>
+    <p style="font-size:13px; color:#666;">Bienvenue parmi nos clients !</p>
+  `);
+  return send(params.to, subject, html, `Bienvenue ${params.name}.`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 2. Dépôt de document → confirmation au client
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendDocumentUploadConfirmationEmail(params: {
+  to: string;
+  clientName: string;
+  documentName: string;
+}) {
+  const subject = "Document bien reçu — Cabinet Samet de Comptabilité";
+  const html = shell(`
+    <p>Bonjour ${params.clientName},</p>
+    <p>Nous avons bien reçu votre document :</p>
+    <p style="font-size:16px;"><strong>${params.documentName}</strong></p>
+    <p>${badge("En attente")}</p>
+    <p style="margin-top:16px;">Notre équipe va le traiter prochainement. Vous serez notifié par email à chaque changement de statut.</p>
+  `);
+  return send(
+    params.to,
+    subject,
+    html,
+    `Document reçu : ${params.documentName}.`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 3. Changement de statut → notification au client
+// ─────────────────────────────────────────────────────────────────────────
 export async function sendStatusChangeEmail(params: {
   to: string;
   clientName: string;
@@ -67,65 +128,140 @@ export async function sendStatusChangeEmail(params: {
   status: string;
 }) {
   const statusLabel = STATUS_LABELS[params.status] ?? params.status;
-  const subject = `Cabinet Samet — Mise à jour de votre document : ${statusLabel}`;
+  const subject = `Mise à jour de votre document : ${statusLabel}`;
   const html = shell(`
     <p>Bonjour ${params.clientName},</p>
     <p>Le statut de votre document <strong>${params.documentName}</strong> a été mis à jour :</p>
     <p style="font-size:18px;"><strong>${statusLabel}</strong></p>
     <p>Vous pouvez consulter le détail depuis votre espace client.</p>
   `);
-  await send(params.to, subject, html, `Statut: ${statusLabel} — Document: ${params.documentName}`);
+  return send(params.to, subject, html, `Statut: ${statusLabel} — Document: ${params.documentName}`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 4. Mot de passe oublié → lien de réinitialisation
+// ─────────────────────────────────────────────────────────────────────────
 export async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
   resetUrl: string;
 }) {
-  const subject = "Cabinet Samet — Réinitialisation de votre mot de passe";
+  const subject = "Réinitialisation de votre mot de passe";
   const html = shell(`
     <p>Bonjour ${params.name},</p>
     <p>Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous. Ce lien est valable <strong>1 heure</strong>.</p>
     <p style="margin:24px 0;">${button(params.resetUrl, "Réinitialiser mon mot de passe")}</p>
     <p style="font-size:13px; color:#666;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email. Votre mot de passe restera inchangé.</p>
   `);
-  await send(params.to, subject, html, `Lien de réinitialisation : ${params.resetUrl}`);
+  return send(params.to, subject, html, `Lien de réinitialisation : ${params.resetUrl}`);
 }
 
 export async function sendPasswordChangedEmail(params: { to: string; name: string }) {
-  const subject = "Cabinet Samet — Votre mot de passe a été modifié";
+  const subject = "Votre mot de passe a été modifié";
   const html = shell(`
     <p>Bonjour ${params.name},</p>
     <p>Nous vous confirmons que votre mot de passe a bien été modifié.</p>
     <p style="font-size:13px; color:#666;">Si vous n'êtes pas à l'origine de ce changement, contactez immédiatement le cabinet.</p>
   `);
-  await send(params.to, subject, html, "Confirmation de changement de mot de passe.");
+  return send(params.to, subject, html, "Confirmation de changement de mot de passe.");
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 5. Compte verrouillé → alerte au client
+// ─────────────────────────────────────────────────────────────────────────
 export async function sendAccountLockedEmail(params: { to: string; name: string }) {
-  const subject = "Cabinet Samet — Votre compte a été bloqué";
+  const subject = "🔒 Votre compte a été bloqué";
   const html = shell(`
     <p>Bonjour ${params.name},</p>
     <p>Pour votre sécurité, votre compte a été <strong>bloqué</strong> à la suite de plusieurs tentatives de connexion échouées.</p>
     <p>Contactez le cabinet ou attendez l'intervention d'un administrateur pour le débloquer.</p>
   `);
-  await send(params.to, subject, html, "Compte bloqué (tentatives de connexion échouées).");
+  return send(params.to, subject, html, "Compte bloqué (tentatives de connexion échouées).");
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// 6. Message admin → notification au client
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendAdminMessageNotificationEmail(params: {
+  to: string;
+  clientName: string;
+  messageBody: string;
+}) {
+  const subject = "Nouveau message du Cabinet Samet de Comptabilité";
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = shell(`
+    <p>Bonjour ${params.clientName},</p>
+    <p>Vous avez reçu un nouveau message de votre cabinet :</p>
+    <p style="background:#f4f5f7; border-left:3px solid ${GREEN}; padding:12px 16px; border-radius:4px; font-style:italic;">${params.messageBody}</p>
+    <p style="margin:24px 0;">${button(`${base}/dashboard`, "Voir dans mon espace")}</p>
+  `);
+  return send(params.to, subject, html, `Message reçu : ${params.messageBody}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7. Nouveau client inscrit → alerte à l'admin
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendAdminNewClientEmail(params: {
+  to: string;
+  clientName: string;
+  clientEmail: string;
+}) {
+  const subject = "Nouveau client inscrit";
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = shell(`
+    <p>Un nouveau client vient de créer un compte :</p>
+    <p><strong>${params.clientName}</strong> — ${params.clientEmail}</p>
+    <p style="margin:24px 0;">${button(`${base}/admin/clients`, "Voir les clients")}</p>
+  `);
+  return send(
+    params.to,
+    subject,
+    html,
+    `Nouveau client : ${params.clientName} (${params.clientEmail})`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 8. Document reçu → alerte à l'admin
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendAdminNewDocumentEmail(params: {
+  to: string;
+  clientName: string;
+  documentName: string;
+}) {
+  const subject = "Nouveau document reçu";
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = shell(`
+    <p>Un nouveau document vient d'être déposé :</p>
+    <p><strong>${params.documentName}</strong></p>
+    <p>Déposé par : ${params.clientName}</p>
+    <p style="margin:24px 0;">${button(`${base}/admin/documents`, "Voir les documents")}</p>
+  `);
+  return send(
+    params.to,
+    subject,
+    html,
+    `Document reçu de ${params.clientName} : ${params.documentName}`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 9. Tentative suspecte de connexion (admin) → alerte à l'admin
+// ─────────────────────────────────────────────────────────────────────────
 export async function sendAdminSuspiciousLoginEmail(params: {
   to: string;
   adminName: string;
   attempts: number;
   ip: string;
 }) {
-  const subject = "[Alerte sécurité] Tentatives de connexion admin suspectes";
+  const subject = "🔒 Tentatives de connexion admin suspectes";
   const html = shell(`
     <p>Alerte de sécurité :</p>
     <p>Le compte administrateur <strong>${params.adminName}</strong> a fait l'objet de <strong>${params.attempts} tentatives de connexion échouées</strong>.</p>
     <p>Dernière adresse IP : <strong>${params.ip}</strong></p>
     <p>Si vous n'êtes pas à l'origine de ces tentatives, changez votre mot de passe et vérifiez l'accès au compte.</p>
   `);
-  await send(
+  return send(
     params.to,
     subject,
     html,
@@ -138,11 +274,11 @@ export async function sendAdminLockAlertEmail(params: {
   clientName: string;
   clientEmail: string;
 }) {
-  const subject = "[Alerte sécurité] Compte client bloqué";
+  const subject = "🔒 Compte client bloqué";
   const html = shell(`
     <p>Alerte de sécurité :</p>
     <p>Le compte du client <strong>${params.clientName}</strong> (${params.clientEmail}) vient d'être bloqué après 5 tentatives de connexion échouées.</p>
     <p>Vous pouvez le débloquer depuis l'espace d'administration.</p>
   `);
-  await send(params.to, subject, html, `Compte bloqué : ${params.clientName} (${params.clientEmail})`);
+  return send(params.to, subject, html, `Compte bloqué : ${params.clientName} (${params.clientEmail})`);
 }

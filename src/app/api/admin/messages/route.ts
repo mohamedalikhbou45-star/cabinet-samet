@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
+import { sendAdminMessageNotificationEmail } from "@/lib/mail";
 
 export async function POST(request: Request) {
   const session = await getAdminSession();
@@ -26,6 +27,13 @@ export async function POST(request: Request) {
 
   const created = await prisma.message.create({
     data: { userId, body: message },
+  });
+
+  // 6. Notification par email au client.
+  await sendAdminMessageNotificationEmail({
+    to: client.email,
+    clientName: client.name,
+    messageBody: message,
   });
 
   return NextResponse.json({ message: created }, { status: 201 });

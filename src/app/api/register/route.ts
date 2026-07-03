@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { sendWelcomeEmail, sendAdminNewClientEmail } from "@/lib/mail";
+import { getAdminNotificationEmails } from "@/lib/notify";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caractères."),
@@ -48,6 +50,21 @@ export async function POST(request: Request) {
         password: hashedPassword,
       },
     });
+
+    // 1. Email de bienvenue au client.
+    await sendWelcomeEmail({ to: normalizedEmail, name });
+
+    // 7. Alerte aux administrateurs : nouveau client inscrit.
+    const admins = await getAdminNotificationEmails();
+    await Promise.all(
+      admins.map((email) =>
+        sendAdminNewClientEmail({
+          to: email,
+          clientName: name,
+          clientEmail: normalizedEmail,
+        })
+      )
+    );
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {

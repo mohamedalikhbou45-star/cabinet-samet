@@ -5,6 +5,11 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  sendDocumentUploadConfirmationEmail,
+  sendAdminNewDocumentEmail,
+} from "@/lib/mail";
+import { getAdminNotificationEmails } from "@/lib/notify";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 const MAX_SIZE = 15 * 1024 * 1024; // 15 Mo
@@ -67,6 +72,32 @@ export async function POST(request: Request) {
       userId: session.user.id,
     },
   });
+
+  const uploader = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, email: true },
+  });
+
+  if (uploader) {
+    // 2. Confirmation de dépôt au client.
+    await sendDocumentUploadConfirmationEmail({
+      to: uploader.email,
+      clientName: uploader.name,
+      documentName: document.originalName,
+    });
+
+    // 8. Alerte aux administrateurs : document reçu.
+    const admins = await getAdminNotificationEmails();
+    await Promise.all(
+      admins.map((email) =>
+        sendAdminNewDocumentEmail({
+          to: email,
+          clientName: uploader.name,
+          documentName: document.originalName,
+        })
+      )
+    );
+  }
 
   return NextResponse.json({ document }, { status: 201 });
 }
