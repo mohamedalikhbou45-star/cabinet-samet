@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { Chatbot } from "@/components/Chatbot";
 
 const links = [
   { href: "/dashboard", label: "Tableau de bord", icon: GridIcon },
@@ -146,6 +147,9 @@ export function DashboardShell({
 
         <main className="mx-auto max-w-6xl px-6 py-10 lg:px-10">{children}</main>
       </div>
+
+      {/* Chatbot — visible uniquement dans l'espace client authentifié. */}
+      <Chatbot />
     </div>
   );
 }
