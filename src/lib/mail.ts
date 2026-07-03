@@ -53,6 +53,37 @@ function badge(label: string) {
   return `<span style="display:inline-block; background:#fef3c7; color:#92400e; font-weight:700; font-size:12px; padding:4px 10px; border-radius:999px;">${label}</span>`;
 }
 
+/**
+ * Vrai en mode sandbox Resend (expéditeur onboarding@resend.dev, aucun
+ * domaine vérifié) : seule l'adresse propriétaire du compte peut recevoir
+ * des emails. Toute autre destination est rejetée avec ce type d'erreur.
+ */
+function isSandboxRestriction(error: unknown): boolean {
+  const e = error as { statusCode?: number; name?: string; message?: string } | undefined;
+  return Boolean(
+    e &&
+      e.statusCode === 403 &&
+      e.name === "validation_error" &&
+      typeof e.message === "string" &&
+      e.message.includes("own email address")
+  );
+}
+
+/**
+ * Repli développement : quand Resend refuse l'envoi à cause de la
+ * restriction sandbox, on redirige l'email vers une boîte de test (au lieu
+ * de le perdre silencieusement) pour pouvoir vérifier son rendu. Désactivable
+ * via EMAIL_DEV_FALLBACK=false — à couper une fois un domaine vérifié.
+ */
+function devFallbackAddress(): string | null {
+  if (process.env.EMAIL_DEV_FALLBACK === "false") return null;
+  return process.env.ADMIN_NOTIFICATION_EMAIL?.split(",")[0]?.trim() || null;
+}
+
+async function attemptSend(to: string, subject: string, html: string) {
+  return resendClient!.emails.send({ from: fromAddress(), to, subject, html });
+}
+
 /** Envoi via Resend — trace dans la console si RESEND_API_KEY est absente. */
 async function send(to: string, subject: string, html: string, logLine: string) {
   if (!resendClient) {
@@ -61,16 +92,33 @@ async function send(to: string, subject: string, html: string, logLine: string) 
   }
 
   try {
-    const result = await resendClient.emails.send({
-      from: fromAddress(),
-      to,
-      subject,
-      html,
-    });
+    const result = await attemptSend(to, subject, html);
+
     if (result.error) {
+      const fallback = devFallbackAddress();
+      if (isSandboxRestriction(result.error) && fallback && fallback !== to) {
+        console.warn(
+          `[RESEND] Sandbox : envoi à ${to} refusé, redirection vers ${fallback} (aperçu de test).`
+        );
+        const retry = await attemptSend(
+          fallback,
+          `[Aperçu — destiné à ${to}] ${subject}`,
+          `<p style="background:#fef3c7;color:#92400e;padding:10px 14px;border-radius:4px;font-size:13px;margin-bottom:16px;">
+             ⚠️ Sandbox Resend : cet email était destiné à <strong>${to}</strong>. Vérifiez un domaine sur resend.com/domains pour l'envoyer réellement à ce destinataire.
+           </p>${html}`
+        );
+        if (retry.error) {
+          console.error(`[RESEND] Échec de la redirection vers ${fallback} :`, retry.error);
+          return { ok: false, error: retry.error };
+        }
+        console.log(`[RESEND] Aperçu envoyé à ${fallback} (id=${retry.data?.id}) — ${subject}`);
+        return { ok: true, id: retry.data?.id, redirected: true as const };
+      }
+
       console.error(`[RESEND] Échec envoi à ${to} :`, result.error);
       return { ok: false, error: result.error };
     }
+
     console.log(`[RESEND] Email envoyé à ${to} (id=${result.data?.id}) — ${subject}`);
     return { ok: true, id: result.data?.id };
   } catch (error) {
