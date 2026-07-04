@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { randomUUID } from "crypto";
-import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { uploadDocumentFile } from "@/lib/storage";
 import {
   sendDocumentUploadConfirmationEmail,
   sendAdminNewDocumentEmail,
 } from "@/lib/mail";
 import { getAdminNotificationEmails } from "@/lib/notify";
 
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 const MAX_SIZE = 15 * 1024 * 1024; // 15 Mo
 const ALLOWED_TYPES = ["FACTURE", "LEASING", "RELEVE_BANCAIRE", "AUTRE"];
 
@@ -59,13 +58,29 @@ export async function POST(request: Request) {
   const extension = path.extname(file.name);
   const storedName = `${randomUUID()}${extension}`;
 
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  await writeFile(path.join(UPLOAD_DIR, storedName), bytes);
+  let storagePath: string;
+  try {
+    // Upload dans Supabase Storage, dans un dossier dédié au client :
+    // documents/{userId}/{storedName}
+    storagePath = await uploadDocumentFile({
+      userId: session.user.id,
+      storedName,
+      buffer: bytes,
+      mimeType: file.type || "application/octet-stream",
+    });
+  } catch (error) {
+    console.error("Échec de l'upload vers Supabase Storage :", error);
+    return NextResponse.json(
+      { error: "Échec de l'envoi du fichier. Veuillez réessayer." },
+      { status: 502 }
+    );
+  }
 
   const document = await prisma.document.create({
     data: {
       originalName: file.name,
       storedName,
+      storagePath,
       mimeType: file.type || "application/octet-stream",
       size: file.size,
       type: documentType as never,

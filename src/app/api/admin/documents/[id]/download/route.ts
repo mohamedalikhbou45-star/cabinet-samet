@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
 import { getAdminSession } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
-
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+import { getSignedDownloadUrl } from "@/lib/storage";
 
 export async function GET(
   _request: Request,
@@ -21,24 +18,25 @@ export async function GET(
   if (!document) {
     return NextResponse.json({ error: "Document introuvable." }, { status: 404 });
   }
+  if (!document.storagePath) {
+    return NextResponse.json(
+      { error: "Fichier introuvable dans le stockage." },
+      { status: 404 }
+    );
+  }
 
   try {
-    const filePath = path.join(UPLOAD_DIR, document.storedName);
-    const data = await readFile(filePath);
-    const encodedName = encodeURIComponent(document.originalName);
-
-    return new NextResponse(data, {
-      status: 200,
-      headers: {
-        "Content-Type": document.mimeType || "application/octet-stream",
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodedName}`,
-        "Content-Length": String(data.length),
-      },
-    });
-  } catch {
+    // URL Supabase signée et temporaire : le bucket "documents" est privé.
+    const signedUrl = await getSignedDownloadUrl(
+      document.storagePath,
+      document.originalName
+    );
+    return NextResponse.redirect(signedUrl);
+  } catch (error) {
+    console.error("Échec de génération de l'URL de téléchargement :", error);
     return NextResponse.json(
-      { error: "Fichier introuvable sur le serveur." },
-      { status: 404 }
+      { error: "Échec de la génération du lien de téléchargement." },
+      { status: 502 }
     );
   }
 }

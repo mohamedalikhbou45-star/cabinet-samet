@@ -72,6 +72,8 @@ model Document {
   id           String         @id @default(cuid())
   originalName String
   storedName   String
+  /// Chemin dans le bucket Supabase Storage "documents" : {userId}/{storedName}
+  storagePath  String?
   mimeType     String
   size         Int
   type         DocumentType   @default(AUTRE)
