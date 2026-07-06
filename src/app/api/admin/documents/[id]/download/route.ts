@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
-import { getSignedDownloadUrl } from "@/lib/storage";
+import { downloadDocumentFile } from "@/lib/storage";
 
 export async function GET(
   _request: Request,
@@ -26,16 +26,24 @@ export async function GET(
   }
 
   try {
-    // URL Supabase signée et temporaire : le bucket "documents" est privé.
-    const signedUrl = await getSignedDownloadUrl(
-      document.storagePath,
-      document.originalName
-    );
-    return NextResponse.redirect(signedUrl);
+    const bytes = await downloadDocumentFile(document.storagePath);
+    // Encodage RFC 5987 en une seule passe : restitue le nom d'origine
+    // exact (accents compris) sans le double encodage vu avec les URL
+    // signées Supabase pour les noms non-ASCII.
+    const encodedName = encodeURIComponent(document.originalName);
+
+    return new NextResponse(bytes, {
+      status: 200,
+      headers: {
+        "Content-Type": document.mimeType || "application/octet-stream",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodedName}`,
+        "Content-Length": String(bytes.length),
+      },
+    });
   } catch (error) {
-    console.error("Échec de génération de l'URL de téléchargement :", error);
+    console.error("Échec du téléchargement du document :", error);
     return NextResponse.json(
-      { error: "Échec de la génération du lien de téléchargement." },
+      { error: "Échec de la récupération du fichier." },
       { status: 502 }
     );
   }

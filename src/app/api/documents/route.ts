@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { randomUUID } from "crypto";
-import path from "path";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadDocumentFile } from "@/lib/storage";
@@ -55,19 +53,20 @@ export async function POST(request: Request) {
   const documentType = ALLOWED_TYPES.includes(type) ? type : "AUTRE";
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const extension = path.extname(file.name);
-  const storedName = `${randomUUID()}${extension}`;
 
   let storagePath: string;
+  let storedName: string;
   try {
-    // Upload dans Supabase Storage, dans un dossier dédié au client :
-    // documents/{userId}/{storedName}
-    storagePath = await uploadDocumentFile({
+    // Upload dans Supabase Storage, dans un dossier dédié au client, en
+    // conservant le nom original : documents/{userId}/{nom-original}
+    const uploaded = await uploadDocumentFile({
       userId: session.user.id,
-      storedName,
+      originalName: file.name,
       buffer: bytes,
       mimeType: file.type || "application/octet-stream",
     });
+    storagePath = uploaded.path;
+    storedName = uploaded.storedName;
   } catch (error) {
     console.error("Échec de l'upload vers Supabase Storage :", error);
     return NextResponse.json(
