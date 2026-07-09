@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import { sendStatusChangeEmail } from "@/lib/mail";
 
@@ -10,8 +9,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const user = await getAuthUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
   }
 
@@ -27,7 +26,7 @@ export async function PATCH(
     include: { user: true },
   });
 
-  if (!document || document.userId !== session.user.id) {
+  if (!document || document.userId !== user.id) {
     return NextResponse.json({ error: "Document introuvable." }, { status: 404 });
   }
 

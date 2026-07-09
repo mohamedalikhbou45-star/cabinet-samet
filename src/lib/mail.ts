@@ -294,6 +294,29 @@ export async function sendAdminNewDocumentEmail(params: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 8bis. Réponse d'un client à un message → alerte à l'admin
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendAdminClientReplyEmail(params: {
+  to: string;
+  clientName: string;
+  messageBody: string;
+}) {
+  const subject = "Nouvelle réponse client";
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const html = shell(`
+    <p><strong>${params.clientName}</strong> a répondu à un message :</p>
+    <p style="background:#f4f5f7; border-left:3px solid ${GREEN}; padding:12px 16px; border-radius:4px; font-style:italic;">${params.messageBody}</p>
+    <p style="margin:24px 0;">${button(`${base}/admin/messages`, "Voir les messages")}</p>
+  `);
+  return send(
+    params.to,
+    subject,
+    html,
+    `Réponse de ${params.clientName} : ${params.messageBody}`
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 9. Tentative suspecte de connexion (admin) → alerte à l'admin
 // ─────────────────────────────────────────────────────────────────────────
 export async function sendAdminSuspiciousLoginEmail(params: {

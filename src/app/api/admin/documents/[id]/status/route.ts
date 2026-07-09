@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { sendStatusChangeEmail } from "@/lib/mail";
+import { sendPushToUser } from "@/lib/push";
+import { STATUS_LABELS } from "@/lib/labels";
 
 const ALLOWED_STATUSES = ["EN_ATTENTE", "EN_TRAITEMENT", "TRAITE"];
 
@@ -46,6 +48,13 @@ export async function PATCH(
     documentName: document.originalName,
     status,
   });
+
+  // Notification push (app mobile) à chaque changement de statut.
+  await sendPushToUser(
+    document.userId,
+    "Statut mis à jour",
+    `${document.originalName} : ${STATUS_LABELS[status]}`
+  );
 
   return NextResponse.json({ document: updated });
 }

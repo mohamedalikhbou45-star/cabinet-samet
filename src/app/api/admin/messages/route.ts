@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const created = await prisma.message.create({
-    data: { userId, body: message },
+    data: { userId, body: message, sender: "ADMIN" },
   });
 
   // 6. Notification par email au client.

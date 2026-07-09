@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthUser } from "@/lib/mobileAuth";
 import { prisma } from "@/lib/prisma";
 import { validatePassword } from "@/lib/password";
 import { sendPasswordChangedEmail } from "@/lib/mail";
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const authUser = await getAuthUser(request);
+  if (!authUser) {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
   }
 
@@ -23,12 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: policyError }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
-  if (!user) {
-    return NextResponse.json({ error: "Utilisateur introuvable." }, { status: 404 });
-  }
+  const user = authUser;
 
   const valid = await bcrypt.compare(currentPassword, user.password);
   if (!valid) {

@@ -29,6 +29,19 @@ model User {
   messages       Message[]
   resetTokens    PasswordResetToken[]
   loginAttempts  LoginAttempt[]
+  pushTokens     PushToken[]
+}
+
+/// Jeton de notification push Expo (app mobile), un par appareil.
+model PushToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  platform  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model PasswordResetToken {
@@ -87,12 +100,18 @@ model Document {
   @@index([userId])
 }
 
+enum MessageSender {
+  ADMIN
+  CLIENT
+}
+
 model Message {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   body      String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  read      Boolean       @default(false)
+  sender    MessageSender @default(ADMIN)
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
 
   @@index([userId])
