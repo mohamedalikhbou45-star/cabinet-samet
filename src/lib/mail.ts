@@ -215,6 +215,29 @@ export async function sendPasswordChangedEmail(params: { to: string; name: strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 4bis. Double authentification → code de connexion à 6 chiffres
+// ─────────────────────────────────────────────────────────────────────────
+export async function sendTwoFactorCodeEmail(params: {
+  to: string;
+  name: string;
+  code: string;
+}) {
+  const subject = "Votre code de connexion Cabinet Samet";
+  const html = shell(`
+    <p>Bonjour ${params.name},</p>
+    <p>Voici votre code de connexion à usage unique :</p>
+    <p style="margin:28px 0; text-align:center;">
+      <span style="display:inline-block; background:#f4f5f7; border:1px solid #e5e7eb; border-radius:8px; padding:16px 28px; font-size:32px; font-weight:800; letter-spacing:8px; color:${NAVY};">
+        ${params.code}
+      </span>
+    </p>
+    <p style="font-size:13px; color:#666;">Ce code expire dans <strong>10 minutes</strong>.</p>
+    <p style="font-size:13px; color:#666;">Si vous n'avez pas demandé ce code, ignorez cet email.</p>
+  `);
+  return send(params.to, subject, html, `Code de connexion : ${params.code}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // 5. Compte verrouillé → alerte au client
 // ─────────────────────────────────────────────────────────────────────────
 export async function sendAccountLockedEmail(params: { to: string; name: string }) {

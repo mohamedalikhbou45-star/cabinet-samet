@@ -16,6 +16,9 @@ export default async function AdminProtectedLayout({
   if (session.user.role !== "ADMIN") {
     redirect("/dashboard");
   }
+  if (!session.user.twoFactorVerified) {
+    redirect("/verify-2fa");
+  }
 
   return (
     <AdminShell adminName={session.user.name ?? "Administrateur"}>

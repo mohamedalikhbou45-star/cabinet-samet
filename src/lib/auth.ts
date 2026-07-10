@@ -7,8 +7,14 @@ import {
   sendAccountLockedEmail,
   sendAdminLockAlertEmail,
   sendAdminSuspiciousLoginEmail,
+  sendTwoFactorCodeEmail,
 } from "@/lib/mail";
 import { getAdminNotificationEmails } from "@/lib/notify";
+import {
+  createTwoFactorToken,
+  REMEMBER_DEVICE_COOKIE,
+  verifyRememberDeviceToken,
+} from "@/lib/twoFactor";
 import type { User as PrismaUser } from "@prisma/client";
 
 function extractIp(req?: { headers?: Record<string, string | undefined> }) {
@@ -17,6 +23,19 @@ function extractIp(req?: { headers?: Record<string, string | undefined> }) {
   const real = req?.headers?.["x-real-ip"];
   if (typeof real === "string" && real.length) return real;
   return "127.0.0.1";
+}
+
+function extractCookie(
+  req: { headers?: Record<string, string | undefined> } | undefined,
+  name: string
+): string | undefined {
+  const raw = req?.headers?.cookie;
+  if (!raw) return undefined;
+  const match = raw
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : undefined;
 }
 
 async function logAttempt(
@@ -103,20 +122,47 @@ export const authOptions: NextAuthOptions = {
         });
         await logAttempt(email, ip, true, user.id);
 
+        // Double authentification : sautée si cet appareil est reconnu
+        // (cookie "se souvenir de cet appareil" signé, valable 30 jours).
+        const deviceCookie = extractCookie(
+          req as never,
+          REMEMBER_DEVICE_COOKIE
+        );
+        const deviceRemembered = verifyRememberDeviceToken(
+          deviceCookie,
+          user.id
+        );
+
+        if (!deviceRemembered) {
+          const code = await createTwoFactorToken(user.id);
+          await sendTwoFactorCodeEmail({
+            to: user.email,
+            name: user.name,
+            code,
+          });
+        }
+
         return {
           id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
+          twoFactorVerified: deviceRemembered,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.twoFactorVerified = user.twoFactorVerified ?? false;
+      }
+      // Déclenché par useSession().update({ twoFactorVerified: true }) côté
+      // client, une fois le code 2FA validé.
+      if (trigger === "update" && session?.twoFactorVerified) {
+        token.twoFactorVerified = true;
       }
       return token;
     },
@@ -124,6 +170,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.twoFactorVerified = token.twoFactorVerified;
       }
       return session;
     },

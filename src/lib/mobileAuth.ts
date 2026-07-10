@@ -49,5 +49,7 @@ export async function getAuthUser(request: Request): Promise<User | null> {
 
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
+  // Une session avec 2FA en attente ne doit donner accès à aucune route protégée.
+  if (!session.user.twoFactorVerified) return null;
   return prisma.user.findUnique({ where: { id: session.user.id } });
 }

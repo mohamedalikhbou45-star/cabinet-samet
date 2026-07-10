@@ -13,6 +13,9 @@ export default async function DashboardLayout({
   if (!session?.user) {
     redirect("/login");
   }
+  if (!session.user.twoFactorVerified) {
+    redirect("/verify-2fa");
+  }
 
   return (
     <DashboardShell userName={session.user.name ?? "Client"}>

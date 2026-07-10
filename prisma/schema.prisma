@@ -30,6 +30,20 @@ model User {
   resetTokens    PasswordResetToken[]
   loginAttempts  LoginAttempt[]
   pushTokens     PushToken[]
+  twoFactorTokens TwoFactorToken[]
+}
+
+/// Code de vérification à 6 chiffres pour la double authentification par email.
+model TwoFactorToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Jeton de notification push Expo (app mobile), un par appareil.

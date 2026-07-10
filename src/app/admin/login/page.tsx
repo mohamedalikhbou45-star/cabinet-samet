@@ -62,6 +62,11 @@ export default function AdminLoginPage() {
       return;
     }
 
+    if (!session.user.twoFactorVerified) {
+      router.push("/verify-2fa");
+      return;
+    }
+
     router.push("/admin/dashboard");
     router.refresh();
   }

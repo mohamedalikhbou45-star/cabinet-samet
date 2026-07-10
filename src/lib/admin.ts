@@ -10,5 +10,9 @@ export async function getAdminSession() {
   if (!session?.user || session.user.role !== "ADMIN") {
     return null;
   }
+  // Une session avec 2FA en attente ne doit donner accès à aucune route admin.
+  if (!session.user.twoFactorVerified) {
+    return null;
+  }
   return session;
 }

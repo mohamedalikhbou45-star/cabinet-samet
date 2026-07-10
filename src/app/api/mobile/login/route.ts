@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createMobileToken } from "@/lib/mobileAuth";
+import { sendTwoFactorCodeEmail } from "@/lib/mail";
+import { createTwoFactorToken, verifyRememberDeviceToken } from "@/lib/twoFactor";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const email = typeof body.email === "string" ? body.email.toLowerCase().trim() : "";
   const password = typeof body.password === "string" ? body.password : "";
+  const deviceToken = typeof body.deviceToken === "string" ? body.deviceToken : undefined;
 
   if (!email || !password) {
     return NextResponse.json(
@@ -44,6 +47,14 @@ export async function POST(request: Request) {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) {
     return NextResponse.json({ error: "Identifiants incorrects." }, { status: 401 });
+  }
+
+  const deviceRemembered = verifyRememberDeviceToken(deviceToken, user.id);
+
+  if (!deviceRemembered) {
+    const code = await createTwoFactorToken(user.id);
+    await sendTwoFactorCodeEmail({ to: user.email, name: user.name, code });
+    return NextResponse.json({ requires2FA: true, userId: user.id });
   }
 
   const token = createMobileToken(user.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthShell } from "@/components/AuthShell";
@@ -52,6 +52,14 @@ export default function LoginPage() {
         setError(parseAuthError(result.error).message);
       }
       setLoading(false);
+      return;
+    }
+
+    const session = await getSession();
+    setLoading(false);
+
+    if (session?.user && !session.user.twoFactorVerified) {
+      router.push("/verify-2fa");
       return;
     }
 
