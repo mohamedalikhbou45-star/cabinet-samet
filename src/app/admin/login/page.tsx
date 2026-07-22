@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { LockCountdown } from "@/components/LockCountdown";
 import { parseAuthError } from "@/lib/authError";
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const expired = searchParams.get("expired") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -95,6 +97,15 @@ export default function AdminLoginPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+            {expired && (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-sm border-l-4 border-amber-500 bg-amber-500/10 px-4 py-3.5 text-sm text-amber-200"
+              >
+                <span className="mt-0.5 text-lg leading-none">⏰</span>
+                <p>Votre session a expiré pour des raisons de sécurité.</p>
+              </div>
+            )}
             {lockUntil !== null && !blocked && (
               <LockCountdown
                 until={lockUntil}
@@ -170,5 +181,13 @@ export default function AdminLoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginForm />
+    </Suspense>
   );
 }

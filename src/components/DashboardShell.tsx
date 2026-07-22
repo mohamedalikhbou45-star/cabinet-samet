@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Chatbot } from "@/components/Chatbot";
+import { SessionTimeoutGuard } from "@/components/SessionTimeoutGuard";
 
 const links = [
   { href: "/dashboard", label: "Tableau de bord", icon: GridIcon },
@@ -150,6 +151,7 @@ export function DashboardShell({
 
       {/* Chatbot — visible uniquement dans l'espace client authentifié. */}
       <Chatbot />
+      <SessionTimeoutGuard logoutUrl="/login" />
     </div>
   );
 }

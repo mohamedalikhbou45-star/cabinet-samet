@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { SessionTimeoutGuard } from "@/components/SessionTimeoutGuard";
 
 const links = [
   { href: "/admin/dashboard", label: "Tableau de bord", icon: GridIcon },
@@ -129,6 +130,7 @@ export function AdminShell({
 
         <main className="mx-auto max-w-7xl px-6 py-10 lg:px-10">{children}</main>
       </div>
+      <SessionTimeoutGuard logoutUrl="/admin/login" />
     </div>
   );
 }
