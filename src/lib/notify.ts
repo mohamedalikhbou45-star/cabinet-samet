@@ -1,11 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-/**
- * Adresses à notifier pour les alertes admin. Priorité à
- * `ADMIN_NOTIFICATION_EMAIL` (boîte de test/réception dédiée, ex. en sandbox
- * Resend où seul le compte propriétaire peut recevoir des emails) ; sinon,
- * les comptes ADMIN en base.
- */
+/** Destinataires des alertes admin : ADMIN_NOTIFICATION_EMAIL, sinon les comptes ADMIN. */
 export async function getAdminNotificationEmails(): Promise<string[]> {
   const envValue = process.env.ADMIN_NOTIFICATION_EMAIL;
   if (envValue) {

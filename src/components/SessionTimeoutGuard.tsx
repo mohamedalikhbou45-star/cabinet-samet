@@ -17,11 +17,9 @@ function formatCountdown(ms: number) {
 }
 
 /**
- * Déconnexion automatique après 30 minutes d'inactivité, avec avertissement
- * 2 minutes avant expiration. L'horodatage de dernière activité est partagé
- * via localStorage : une inactivité prolongée dans un onglet en arrière-plan
- * (ou la fermeture/réouverture de l'onglet) est donc bien prise en compte,
- * et l'activité dans un autre onglet réinitialise aussi ce minuteur.
+ * Déconnexion après 30 min d'inactivité (avertissement 2 min avant).
+ * La dernière activité est stockée dans localStorage pour être partagée
+ * entre les onglets.
  */
 export function SessionTimeoutGuard({ logoutUrl }: { logoutUrl: string }) {
   const [showWarning, setShowWarning] = useState(false);

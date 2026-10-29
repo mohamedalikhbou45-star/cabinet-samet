@@ -53,11 +53,7 @@ function badge(label: string) {
   return `<span style="display:inline-block; background:#fef3c7; color:#92400e; font-weight:700; font-size:12px; padding:4px 10px; border-radius:999px;">${label}</span>`;
 }
 
-/**
- * Vrai en mode sandbox Resend (expéditeur onboarding@resend.dev, aucun
- * domaine vérifié) : seule l'adresse propriétaire du compte peut recevoir
- * des emails. Toute autre destination est rejetée avec ce type d'erreur.
- */
+/** En sandbox Resend, seule l'adresse du propriétaire du compte peut recevoir des emails. */
 function isSandboxRestriction(error: unknown): boolean {
   const e = error as { statusCode?: number; name?: string; message?: string } | undefined;
   return Boolean(
@@ -70,10 +66,8 @@ function isSandboxRestriction(error: unknown): boolean {
 }
 
 /**
- * Repli développement : quand Resend refuse l'envoi à cause de la
- * restriction sandbox, on redirige l'email vers une boîte de test (au lieu
- * de le perdre silencieusement) pour pouvoir vérifier son rendu. Désactivable
- * via EMAIL_DEV_FALLBACK=false — à couper une fois un domaine vérifié.
+ * En développement, un email refusé par la sandbox est redirigé vers une
+ * boîte de test. À désactiver (EMAIL_DEV_FALLBACK=false) avec un domaine vérifié.
  */
 function devFallbackAddress(): string | null {
   if (process.env.EMAIL_DEV_FALLBACK === "false") return null;
@@ -127,9 +121,7 @@ async function send(to: string, subject: string, html: string, logLine: string) 
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 1. Inscription client → email de bienvenue
-// ─────────────────────────────────────────────────────────────────────────
+// Inscription client → email de bienvenue
 export async function sendWelcomeEmail(params: { to: string; name: string }) {
   const subject = "Bienvenue au Cabinet Samet de Comptabilité";
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -142,9 +134,7 @@ export async function sendWelcomeEmail(params: { to: string; name: string }) {
   return send(params.to, subject, html, `Bienvenue ${params.name}.`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 2. Dépôt de document → confirmation au client
-// ─────────────────────────────────────────────────────────────────────────
+// Dépôt de document → confirmation au client
 export async function sendDocumentUploadConfirmationEmail(params: {
   to: string;
   clientName: string;
@@ -166,9 +156,7 @@ export async function sendDocumentUploadConfirmationEmail(params: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 3. Changement de statut → notification au client
-// ─────────────────────────────────────────────────────────────────────────
+// Changement de statut → notification au client
 export async function sendStatusChangeEmail(params: {
   to: string;
   clientName: string;
@@ -186,9 +174,7 @@ export async function sendStatusChangeEmail(params: {
   return send(params.to, subject, html, `Statut: ${statusLabel} — Document: ${params.documentName}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 4. Mot de passe oublié → lien de réinitialisation
-// ─────────────────────────────────────────────────────────────────────────
+// Mot de passe oublié → lien de réinitialisation
 export async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
@@ -214,9 +200,7 @@ export async function sendPasswordChangedEmail(params: { to: string; name: strin
   return send(params.to, subject, html, "Confirmation de changement de mot de passe.");
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 4bis. Double authentification → code de connexion à 6 chiffres
-// ─────────────────────────────────────────────────────────────────────────
+// Double authentification → code de connexion à 6 chiffres
 export async function sendTwoFactorCodeEmail(params: {
   to: string;
   name: string;
@@ -237,9 +221,7 @@ export async function sendTwoFactorCodeEmail(params: {
   return send(params.to, subject, html, `Code de connexion : ${params.code}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 5. Compte verrouillé → alerte au client
-// ─────────────────────────────────────────────────────────────────────────
+// Compte verrouillé → alerte au client
 export async function sendAccountLockedEmail(params: { to: string; name: string }) {
   const subject = "🔒 Votre compte a été bloqué";
   const html = shell(`
@@ -250,9 +232,7 @@ export async function sendAccountLockedEmail(params: { to: string; name: string 
   return send(params.to, subject, html, "Compte bloqué (tentatives de connexion échouées).");
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 6. Message admin → notification au client
-// ─────────────────────────────────────────────────────────────────────────
+// Message admin → notification au client
 export async function sendAdminMessageNotificationEmail(params: {
   to: string;
   clientName: string;
@@ -269,9 +249,7 @@ export async function sendAdminMessageNotificationEmail(params: {
   return send(params.to, subject, html, `Message reçu : ${params.messageBody}`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 7. Nouveau client inscrit → alerte à l'admin
-// ─────────────────────────────────────────────────────────────────────────
+// Nouveau client inscrit → alerte à l'admin
 export async function sendAdminNewClientEmail(params: {
   to: string;
   clientName: string;
@@ -292,9 +270,7 @@ export async function sendAdminNewClientEmail(params: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 8. Document reçu → alerte à l'admin
-// ─────────────────────────────────────────────────────────────────────────
+// Document reçu → alerte à l'admin
 export async function sendAdminNewDocumentEmail(params: {
   to: string;
   clientName: string;
@@ -316,9 +292,7 @@ export async function sendAdminNewDocumentEmail(params: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 8bis. Réponse d'un client à un message → alerte à l'admin
-// ─────────────────────────────────────────────────────────────────────────
+// Réponse d'un client à un message → alerte à l'admin
 export async function sendAdminClientReplyEmail(params: {
   to: string;
   clientName: string;
@@ -339,9 +313,7 @@ export async function sendAdminClientReplyEmail(params: {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 9. Tentative suspecte de connexion (admin) → alerte à l'admin
-// ─────────────────────────────────────────────────────────────────────────
+// Tentative suspecte de connexion (admin) → alerte à l'admin
 export async function sendAdminSuspiciousLoginEmail(params: {
   to: string;
   adminName: string;
