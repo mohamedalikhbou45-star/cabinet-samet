@@ -9,7 +9,7 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
-    "seed:admin": "node scripts/seed-admin.mjs"
+    "seed:admin": "node --env-file=.env scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "2.4.2",
